@@ -1,3 +1,10 @@
+//
+//  HLSVideoFTContentNode.swift
+//  TelegramUniversalVideoContent
+//
+//  Created by Stan Potemkin on 21.10.2024.
+//
+
 import Foundation
 import SwiftSignalKit
 import UniversalMediaPlayer
@@ -11,8 +18,9 @@ import AVFoundation
 import Display
 import PhotoResources
 import TelegramVoip
+import FairyTurtle_Level_1
 
-final class HLSVideoAVContentNode: ASDisplayNode, UniversalVideoContentNode {
+final class HLSVideoFTContentNode: ASDisplayNode, UniversalVideoContentNode {
     private let postbox: Postbox
     private let userLocation: MediaResourceUserLocation
     private let fileReference: FileMediaReference
@@ -84,6 +92,9 @@ final class HLSVideoAVContentNode: ASDisplayNode, UniversalVideoContentNode {
     
     private var preferredVideoQuality: UniversalVideoContentVideoQuality = .auto
     
+    private let videoLayer = AVSampleBufferDisplayLayer()
+    private let playbackManager = FTPlaybackManager()
+    
     init(accountId: AccountRecordId, postbox: Postbox, audioSessionManager: ManagedAudioSession, userLocation: MediaResourceUserLocation, fileReference: FileMediaReference, streamVideo: Bool, loopVideo: Bool, enableSound: Bool, baseRate: Double, fetchAutomatically: Bool) {
         self.postbox = postbox
         self.fileReference = fileReference
@@ -106,6 +117,8 @@ final class HLSVideoAVContentNode: ASDisplayNode, UniversalVideoContentNode {
         }
         
         self.imageNode = TransformImageNode()
+        
+        playbackManager.bind(videoLayer: videoLayer)
         
         var player: AVPlayer?
         player = AVPlayer(playerItem: nil)
@@ -179,8 +192,8 @@ final class HLSVideoAVContentNode: ASDisplayNode, UniversalVideoContentNode {
                     
                     self.setPlayerItem(playerItem)
                     
-                    if let c = try? String(contentsOf: URL(string: assetUrl)!, encoding: .utf8) {
-                        print(c)
+                    if let url = URL(string: assetUrl) {
+                        self.playbackManager.play(remoteUrl: url)
                     }
                 }
             })

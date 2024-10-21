@@ -25,6 +25,67 @@ swift_library(
         "//submodules/Utils/RangeSet:RangeSet",
         "//submodules/TelegramVoip",
         "//submodules/ManagedFile",
+        ":FairyTurtle_Level_1",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+swift_library(
+    name = "FairyTurtle_Level_1",
+    module_name = "FairyTurtle_Level_1",
+    srcs = glob([
+        "FairyTurtle_Level_1/**/*.swift",
+    ]),
+    copts = [
+    ],
+    deps = [
+        ":FairyTurtle_Level_2",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+objc_library(
+    name = "FairyTurtle_Level_2",
+    enable_modules = True,
+    module_name = "FairyTurtle_Level_2",
+    srcs = glob([
+        "FairyTurtle_Level_2/Sources/**/*.m",
+        "FairyTurtle_Level_2/Sources/**/*.mm",
+        "FairyTurtle_Level_2/Sources/**/*.h",
+        "FairyTurtle_Level_2/Sources/**/*.c",
+        "FairyTurtle_Level_2/Sources/**/*.cpp",
+    ]),
+    copts = [],
+    hdrs = glob([
+        "FairyTurtle_Level_2/PublicHeaders/*.h",
+    ]),
+    includes = [
+        "FairyTurtle_Level_2/PublicHeaders",
+    ],
+    deps = [
+        ":FairyTurtle_Level_3",
+    ],
+    sdk_frameworks = [
+        "Foundation",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+swift_library(
+    name = "FairyTurtle_Level_3",
+    module_name = "FairyTurtle_Level_3",
+    srcs = glob([
+        "FairyTurtle_Level_3/**/*.swift",
+    ]),
+    copts = [
+    ],
+    deps = [
     ],
     visibility = [
         "//visibility:public",
