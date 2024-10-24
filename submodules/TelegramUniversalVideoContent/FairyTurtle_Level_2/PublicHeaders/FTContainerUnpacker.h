@@ -9,7 +9,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class FTContainerMeta;
+@class FTContainerVideoMeta;
 
 @interface FTContainerUnpacker : NSObject
 - (instancetype)initWithVariants:(NSArray *)variants;

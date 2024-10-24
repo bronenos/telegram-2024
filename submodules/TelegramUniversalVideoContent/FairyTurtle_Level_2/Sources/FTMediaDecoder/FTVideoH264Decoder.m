@@ -6,12 +6,12 @@
 //
 
 @import VideoToolbox;
-#import "../FTContainerUnpacker/FTContainerMeta.h"
+#import "../FTContainerUnpacker/FTContainerVideoMeta.h"
 #import "FTVideoH264Decoder.h"
 #import "FTPlaybackFrame.h"
 #import "../Extensions/NSData+.h"
 //#import "FTPlayerView-Swift.h"
-#import "../ThirdParty/h264_parse_sps/h264_sps_parse.h"
+#import "../ThirdParty/h264_sps_parse/h264_sps_parse.h"
 
 static void videoToolboxDidDecompress(void *decompressionOutputRefCon, void *sourceFrameRefCon, OSStatus status, VTDecodeInfoFlags infoFlags, CVImageBufferRef pixelBuffer, CMTime presentationTimeStamp, CMTime presentationDuration);
 
@@ -34,7 +34,7 @@ typedef enum {
 
 @implementation FTVideoH264Decoder
 {
-    FTContainerMeta *meta;
+    FTContainerVideoMeta *meta;
     
     NSLock *mutex;
     NSMutableData *contiguousBuffer;
@@ -44,9 +44,10 @@ typedef enum {
     
     CMFormatDescriptionRef format;
     BOOL shouldFlush;
+    NSUInteger passedBytesNum;
 }
 
-- (instancetype)initWithMeta:(FTContainerMeta *)meta {
+- (instancetype)initWithMeta:(FTContainerVideoMeta *)meta {
     if ((self = [super init])) {
         self->meta = meta;
         
@@ -77,12 +78,22 @@ typedef enum {
     
     [self.delegate videoDecoder:self startBatchDecoding:[NSDate new]];
     for (;;) {
+        static uint32_t num = 0;
+        num++;
+        
+        if (num == 150) {
+            printf("Decoding %d left: %lu \n", num, (unsigned long)contiguousBuffer.length);
+        }
+        
         NSData *naluBuffer = [self findNextNaluWithHeader:self->meta];
-        if (naluBuffer) {
-            [self processNalu:naluBuffer];
+        if (naluBuffer == NULL) {
+            break;
+        }
+        else if (naluBuffer.length == 0) {
+            continue;
         }
         else {
-            break;
+            [self processNalu:naluBuffer];
         }
     }
     
@@ -91,9 +102,10 @@ typedef enum {
     printf(" \n");
 }
 
-- (void)reset {
-    shouldFlush = true;
+- (void)resetWithPosition:(NSUInteger)position {
     [contiguousBuffer setData:[NSData new]]; 
+    shouldFlush = true;
+    passedBytesNum = position;
 }
 
 - (void)recalculateActualFramerate {
@@ -118,7 +130,7 @@ typedef enum {
     return NULL;
 }
 
-- (NSData *)findNextNaluWithHeader:(FTContainerMeta *)header {
+- (NSData *)findNextNaluWithHeader:(FTContainerVideoMeta *)header {
     if (header.naluLength > 0) {
         return [self findNextNalu_AVCC:header];
     }
@@ -127,39 +139,48 @@ typedef enum {
     }
 }
 
-- (NSData *)findNextNalu_AVCC:(FTContainerMeta *)header {
+- (NSData *)findNextNalu_AVCC:(FTContainerVideoMeta *)header {
     if (contiguousBuffer.length == 0) {
         return NULL;
     }
     
+    const NSRange dropRange = NSMakeRange(0, header.naluLength);
+    
     uint32_t nalu_len = 0;
-//    printf("DBG header len %d \n", header.naluLength);
     switch (header.naluLength) {
         case 4:
             nalu_len = htonl(*(uint32_t *) contiguousBuffer.bytes);
-//            printf("DBG nalu len %d \n", nalu_len);
             break;
         case 3:
             nalu_len = htonl(*(uint32_t *) contiguousBuffer.bytes) >> 8;
-//            printf("DBG nalu len %d \n", nalu_len);
             break;
         case 2:
             nalu_len = htonl(*(uint16_t *) contiguousBuffer.bytes);
-//            printf("DBG nalu len %d \n", nalu_len);
             break;
         case 1:
         case 0:
             nalu_len = htonl(*(uint8_t *) contiguousBuffer.bytes);
-//            printf("DBG nalu len %d \n", nalu_len);
             break;
         default:
             return NULL;
     }
     
+    /*const uint8_t zeroByte = *(uint8_t *) contiguousBuffer.bytes;
+    if (zeroByte > 0x00) {
+        [contiguousBuffer replaceBytesInRange:dropRange withBytes:&dropRange length:0];
+        return [NSData new];
+    }
+    else if (nalu_len == 0) {
+        [contiguousBuffer replaceBytesInRange:dropRange withBytes:&dropRange length:0];
+        return [NSData new];
+    }
+    else*/ if (nalu_len >= contiguousBuffer.length) {
+        return NULL;
+    }
+    
     const uint32_t len_placeholder = 4; 
     NSMutableData *output = [[NSMutableData alloc] initWithBytes:&len_placeholder length:len_placeholder];
     
-    const NSRange dropRange = NSMakeRange(0, header.naluLength);
     [contiguousBuffer replaceBytesInRange:dropRange withBytes:&dropRange length:0];
     
     const NSRange naluRange = NSMakeRange(0, nalu_len);
@@ -218,6 +239,7 @@ typedef enum {
         return;
     }
     
+    printf("Decoding kind: %hhu \n", kind);
     switch (kind) {
         case FTVideoH264_NALU_KIND_I_FRAME:
             [self ensureHavingDecoderForceUpdate:NO] && [self decodePixelBuffer:naluBuffer frameKind:kind];

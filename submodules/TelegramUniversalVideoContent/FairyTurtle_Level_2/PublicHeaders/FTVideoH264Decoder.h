@@ -12,14 +12,14 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @protocol FTVideoDecoderDelegate;
-@class FTContainerMeta;
+@class FTContainerVideoMeta;
 @class FTPlaybackFrame;
 
 @interface FTVideoH264Decoder : NSObject
 @property(nonatomic, weak) id<FTVideoDecoderDelegate> delegate;
-- (instancetype)initWithMeta:(FTContainerMeta *)meta;
+- (instancetype)initWithMeta:(FTContainerVideoMeta *)meta;
 - (void)feed:(NSData *)payload;
-- (void)reset;
+- (void)resetWithPosition:(NSUInteger)position;
 @end
 
 @protocol FTVideoDecoderDelegate

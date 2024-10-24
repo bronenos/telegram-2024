@@ -73,11 +73,11 @@ public final class FTPlaybackManager: IFTPlaybackManager, FTPlaybackFlightDelega
             displayLink.add(to: .main, forMode: .common)
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(30)) { [weak self] in
+//        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(30)) { [weak self] in
 //            self?.playbackFlight.seekTo(timestamp: 8)
 //            self?.setSpeed(2.0)
-            self?.setQuality(432)
-        }
+//            self?.setQuality(432)
+//        }
     }
     
     public func availableQualities() -> [Int] {

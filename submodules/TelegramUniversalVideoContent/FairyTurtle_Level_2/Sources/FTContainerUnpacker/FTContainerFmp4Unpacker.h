@@ -7,11 +7,12 @@
 
 #import <Foundation/Foundation.h>
 #import "FTContainerUnpacker.h"
+#import "FTContainerVideoMeta.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface FTContainerFmp4Unpacker : FTContainerUnpacker
-- (instancetype)initWithMeta:(FTContainerMeta *)meta;
+- (instancetype)initWithMeta:(FTContainerVideoMeta *)meta;
 @end
 
 NS_ASSUME_NONNULL_END

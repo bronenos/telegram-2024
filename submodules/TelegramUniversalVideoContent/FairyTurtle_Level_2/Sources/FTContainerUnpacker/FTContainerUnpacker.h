@@ -6,10 +6,9 @@
 //
 
 @import Foundation;
+#import "FTContainerVideoMeta.h"
 
 NS_ASSUME_NONNULL_BEGIN
-
-@class FTContainerMeta;
 
 @interface FTContainerUnpacker : NSObject
 - (instancetype)initWithVariants:(NSArray *)variants;

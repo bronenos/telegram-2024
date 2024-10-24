@@ -30,7 +30,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     weak var delegate: FTPlaybackFlightDelegate?
     
     private let queue = DispatchQueue(label: "ftplayback.queue.flight", qos: .userInteractive)
-    private var meta = FTContainerMeta()
+    private var meta = FTContainerVideoMeta()
     private let unpacker: FTContainerUnpacker
     private var decoder: FTVideoH264Decoder
     
@@ -142,7 +142,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             currentFrameIndex = frameIndex ?? currentFrameIndex + 1
         }
         
-        print("flow: flight: set pts \(Double(currentFrameIndex) / Double(meta.fps))")
+        print("flow: flight: set pts \(Double(currentFrameIndex) / Double(meta.fps)) per \(meta.fps)")
         let pts = CMTimeAdd(CMTime.zero, CMTimeMake(value: currentFrameIndex, timescale: meta.fps))
         CMSampleBufferSetOutputPresentationTimeStamp(frame.sampleBuffer, newValue: pts)
         
@@ -154,7 +154,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     internal func mediaProvider(_ provider: any IFTMediaProvider, fresh: Bool, mappingData: Data?, segmentsData: [FTMediaPlaylistSegmentContent]) {
         if fresh {
             currentFrameIndex = 0
-            decoder.reset()
+//            decoder.reset()
         }
         
         if let mappingData {

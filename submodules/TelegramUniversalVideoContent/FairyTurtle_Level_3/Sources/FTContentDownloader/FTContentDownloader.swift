@@ -115,6 +115,9 @@ public class FTContentDownloader: IFTContentDownloader {
             
             switch receive {
             case .cached(let completion):
+//                if let data = try? Data(contentsOf: localUrl) {
+//                    print("data size: \(data.count)")
+//                }
                 completion(localUrl)
             case .online(let completion):
                 let data = try? Data(contentsOf: location)
