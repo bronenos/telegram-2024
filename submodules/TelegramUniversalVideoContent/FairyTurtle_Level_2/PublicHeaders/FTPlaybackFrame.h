@@ -15,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL shouldFlush;
 @property(nonatomic, assign) CMSampleBufferRef sampleBuffer;
 @property(nonatomic, assign) NSTimeInterval segmentEndtime;
+@property(nonatomic, assign) NSTimeInterval absoluteTimestamp;
 
 - (instancetype)initWithSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 @end

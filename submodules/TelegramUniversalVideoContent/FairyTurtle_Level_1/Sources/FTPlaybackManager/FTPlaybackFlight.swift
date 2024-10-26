@@ -12,6 +12,7 @@ import FairyTurtle_Level_2
 import FairyTurtle_Level_3
 
 protocol IFTPlaybackTimeline {
+    var currentHeight: Int { get }
     var delegate: FTPlaybackFlightDelegate? { get set }
     func start(masterPlaylist: FTMasterPlaylist)
     func seekTo(timestamp ts: TimeInterval)
@@ -71,6 +72,10 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
         decoder.delegate = self
     }
     
+    var currentHeight: Int {
+        return mediaProvider.currentHeight
+    }
+    
     func start(masterPlaylist: FTMasterPlaylist) {
         self.masterPlaylist = masterPlaylist
         
@@ -89,12 +94,12 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             return
         }
         
-        let playlists = masterPlaylist.availableMediaPlaylists()
+        let playlists = masterPlaylist.availableMediaPlaylists().sorted { $0.quality > $1.quality }
         
-        if let playlist = playlists.first(where: { $0.quality == quality }) {
+        if let playlist = playlists.first(where: { $0.quality <= quality }) {
             mediaProvider.bindPlaylist(info: playlist)
         }
-        else if let playlist = playlists.first {
+        else if let playlist = playlists.last {
             mediaProvider.bindPlaylist(info: playlist)
         }
         else {
@@ -160,7 +165,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
         if let mappingData {
             let payload = unpacker.extractPayload(mappingData)
             if payload.count > 0 {
-                decoder.feed(payload as Data)
+                decoder.feed(payload as Data, anchorTimestamp: 0)
             }
         }
         
@@ -173,7 +178,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             if payload.count > 0 {
                 print("flow: flight: feed to decoder")
                 decodingSegment = segmentData.segment
-                decoder.feed(payload as Data)
+                decoder.feed(payload as Data, anchorTimestamp: segmentData.segment.since)
             }
         }
     }

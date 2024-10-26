@@ -18,7 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface FTVideoH264Decoder : NSObject
 @property(nonatomic, weak) id<FTVideoDecoderDelegate> delegate;
 - (instancetype)initWithMeta:(FTContainerVideoMeta *)meta;
-- (void)feed:(NSData *)payload;
+- (void)feed:(NSData *)payload anchorTimestamp:(NSTimeInterval)anchorTimestamp;
 - (void)resetWithPosition:(NSUInteger)position;
 @end
 

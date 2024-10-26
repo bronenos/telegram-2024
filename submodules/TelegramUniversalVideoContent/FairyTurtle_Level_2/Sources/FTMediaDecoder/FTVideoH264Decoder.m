@@ -45,6 +45,9 @@ typedef enum {
     CMFormatDescriptionRef format;
     BOOL shouldFlush;
     NSUInteger passedBytesNum;
+    
+    NSUInteger anchorTimestamp;
+    NSUInteger anchorIndex;
 }
 
 - (instancetype)initWithMeta:(FTContainerVideoMeta *)meta {
@@ -61,13 +64,16 @@ typedef enum {
     return self;
 }
 
-- (void)feed:(NSData *)payload {
+- (void)feed:(NSData *)payload anchorTimestamp:(NSTimeInterval)anchorTimestamp {
     printf("Decoding \n");
     
     if (payload.length == 0) {
         printf(" \n");
         return;
     }
+    
+    self->anchorTimestamp = anchorTimestamp;
+    self->anchorIndex = 0;
     
     sequenceParams = sequenceParams ?: self->meta.sps;
     pictureParams = pictureParams ?: self->meta.pps;
@@ -341,6 +347,7 @@ typedef enum {
     FTPlaybackFrame *frame = [[FTPlaybackFrame alloc] initWithSampleBuffer:sampleBuffer];
     frame.isKeyframe = (frameKind == FTVideoH264_NALU_KIND_I_FRAME);
     frame.shouldFlush = shouldFlush;
+    frame.absoluteTimestamp = self->anchorTimestamp + ((NSTimeInterval) self->anchorIndex++) / ((NSTimeInterval) meta.fps);
     [self.delegate videoDecoder:self recognizeFrame:frame];
     
     CFRelease(sampleBuffer);

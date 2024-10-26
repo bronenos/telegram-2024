@@ -9,6 +9,7 @@ import Foundation
 import FairyTurtle_Level_3
 
 protocol IFTMediaProvider: AnyObject {
+    var currentHeight: Int { get }
     var delegate: FTMediaProviderDelegate? { get set }
     func bindPlaylist(info: FTMediaPlaylistInfo)
     func preloadNext(current: TimeInterval, next: TimeInterval) -> TimeInterval
@@ -46,6 +47,15 @@ final class FTMediaProvider: IFTMediaProvider {
         downloadingOperationQueue.maxConcurrentOperationCount = 3
     }
     
+    var currentHeight: Int {
+        if let info {
+            return info.quality
+        }
+        else {
+            return 0
+        }
+    }
+    
     func bindPlaylist(info: FTMediaPlaylistInfo) {
         self.info = info
         
@@ -60,16 +70,13 @@ final class FTMediaProvider: IFTMediaProvider {
     
     func preloadNext(current: TimeInterval, next: TimeInterval) -> TimeInterval {
         guard current >= next - warmDuration else {
-            print("flow: provider: too early request at \(current)")
             return next
         }
         
         if let distant = preloadTimeRange(fresh: false, search: .starting(next)) {
-            print("flow: provider: loading since \(next) until \(distant)")
             return distant
         }
         else {
-            print("flow: provider: nothing to load")
             return next
         }
     }
