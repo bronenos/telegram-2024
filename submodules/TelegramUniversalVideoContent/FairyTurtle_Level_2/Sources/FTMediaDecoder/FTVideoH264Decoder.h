@@ -18,14 +18,14 @@ NS_ASSUME_NONNULL_BEGIN
 @interface FTVideoH264Decoder : NSObject
 @property(nonatomic, weak) id<FTVideoDecoderDelegate> delegate;
 - (instancetype)initWithMeta:(FTContainerVideoMeta *)meta;
-- (void)feed:(NSData *)payload anchorTimestamp:(NSTimeInterval)anchorTimestamp;
+- (void)feed:(NSData *)payload anchorTimestamp:(NSTimeInterval)anchorTimestamp batchId:(NSString *)batchId;
 - (void)resetWithPosition:(NSUInteger)position;
 @end
 
 @protocol FTVideoDecoderDelegate
-- (void)videoDecoder:(FTVideoH264Decoder *)decoder startBatchDecoding:(NSDate *)now;
-- (void)videoDecoder:(FTVideoH264Decoder *)decoder recognizeFrame:(FTPlaybackFrame *)frame;
-- (void)videoDecoder:(FTVideoH264Decoder *)decoder endBatchDecoding:(NSDate *)now;
+- (void)videoDecoder:(FTVideoH264Decoder *)decoder startBatchDecoding:(NSDate *)now batchId:(NSString *)batchId;
+- (void)videoDecoder:(FTVideoH264Decoder *)decoder recognizeFrame:(FTPlaybackFrame *)frame batchId:(NSString *)batchId;
+- (void)videoDecoder:(FTVideoH264Decoder *)decoder endBatchDecoding:(NSDate *)now batchId:(NSString *)batchId;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -268,18 +268,29 @@ final class HLSVideoFTContentNode: ASDisplayNode, UniversalVideoContentNode {
                 self.isBuffering = false
             }
             
-            self.updateStatus()
-        } else if keyPath == "playbackBufferEmpty" {
-            self.isBuffering = true
-            self.updateStatus()
-        } else if keyPath == "playbackLikelyToKeepUp" || keyPath == "playbackBufferFull" {
-            self.isBuffering = false
-            self.updateStatus()
-        } else if keyPath == "presentationSize" {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateStatus()
+            }
+        }
+//        else if keyPath == "playbackBufferEmpty" {
+//            self.isBuffering = true
+//            
+//            DispatchQueue.main.async { [weak self] in
+//                self?.updateStatus()
+//            }
+//        }
+//        else if keyPath == "playbackLikelyToKeepUp" || keyPath == "playbackBufferFull" {
+//            self.isBuffering = false
+//            
+//            DispatchQueue.main.async { [weak self] in
+//                self?.updateStatus()
+//            }
+//        }
+//        else if keyPath == "presentationSize" {
 //            if let currentItem = self.player?.currentItem {
 //                print("Presentation size: \(Int(currentItem.presentationSize.height))")
 //            }
-        }
+//        }
     }
     
     private func performActionAtEnd() {

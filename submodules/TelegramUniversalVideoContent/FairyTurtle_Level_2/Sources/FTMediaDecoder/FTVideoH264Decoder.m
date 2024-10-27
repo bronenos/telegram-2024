@@ -48,6 +48,7 @@ typedef enum {
     
     NSUInteger anchorTimestamp;
     NSUInteger anchorIndex;
+    NSString *batchId;
 }
 
 - (instancetype)initWithMeta:(FTContainerVideoMeta *)meta {
@@ -64,7 +65,7 @@ typedef enum {
     return self;
 }
 
-- (void)feed:(NSData *)payload anchorTimestamp:(NSTimeInterval)anchorTimestamp {
+- (void)feed:(NSData *)payload anchorTimestamp:(NSTimeInterval)anchorTimestamp batchId:(NSString *)batchId {
     printf("Decoding \n");
     
     if (payload.length == 0) {
@@ -74,6 +75,7 @@ typedef enum {
     
     self->anchorTimestamp = anchorTimestamp;
     self->anchorIndex = 0;
+    self->batchId = batchId;
     
     sequenceParams = sequenceParams ?: self->meta.sps;
     pictureParams = pictureParams ?: self->meta.pps;
@@ -82,7 +84,7 @@ typedef enum {
     // uint8_t *ptr = (uint8_t *) payload.bytes; 
     [contiguousBuffer appendData:payload];
     
-    [self.delegate videoDecoder:self startBatchDecoding:[NSDate new]];
+    [self.delegate videoDecoder:self startBatchDecoding:[NSDate new] batchId:self->batchId];
     for (;;) {
         static uint32_t num = 0;
         num++;
@@ -103,7 +105,7 @@ typedef enum {
         }
     }
     
-    [self.delegate videoDecoder:self endBatchDecoding:[NSDate new]];
+    [self.delegate videoDecoder:self endBatchDecoding:[NSDate new] batchId:self->batchId];
     
     printf(" \n");
 }
@@ -348,7 +350,7 @@ typedef enum {
     frame.isKeyframe = (frameKind == FTVideoH264_NALU_KIND_I_FRAME);
     frame.shouldFlush = shouldFlush;
     frame.absoluteTimestamp = self->anchorTimestamp + ((NSTimeInterval) self->anchorIndex++) / ((NSTimeInterval) meta.fps);
-    [self.delegate videoDecoder:self recognizeFrame:frame];
+    [self.delegate videoDecoder:self recognizeFrame:frame batchId:self->batchId];
     
     CFRelease(sampleBuffer);
     CFRelease(blockBuffer);

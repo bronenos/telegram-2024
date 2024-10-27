@@ -42,11 +42,13 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     
     private var seekRequest: SeekRequest?
     private class SeekRequest {
+        let requestId: String
         let timestamp: TimeInterval
         let percentage: Double
         var frames: [FTPlaybackFrame]
         
         init(timestamp: TimeInterval, percentage: Double) {
+            self.requestId = UUID().uuidString
             self.timestamp = timestamp
             self.percentage = percentage
             self.frames = .ex_empty
@@ -113,7 +115,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
                 return
             }
             
-            seekRequest = SeekRequest(
+            let seekRequest = SeekRequest(
                 timestamp: ts,
                 percentage: info.segments.compactMap { segment in
                     let lower = segment.since
@@ -127,8 +129,9 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
                     }
                 }.first ?? -1
             )
+            self.seekRequest = seekRequest
             
-            preloadTimestamp = mediaProvider.resetTo(timestamp: ts)
+            preloadTimestamp = mediaProvider.resetTo(timestamp: ts, batchId: seekRequest.requestId)
         }
     }
     
@@ -156,16 +159,16 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
         return currentFrameIndex
     }
     
-    internal func mediaProvider(_ provider: any IFTMediaProvider, fresh: Bool, mappingData: Data?, segmentsData: [FTMediaPlaylistSegmentContent]) {
+    internal func mediaProvider(_ provider: any IFTMediaProvider, fresh: Bool, mappingData: Data?, segmentsData: [FTMediaPlaylistSegmentContent], batchId: String) {
         if fresh {
             currentFrameIndex = 0
-//            decoder.reset()
+            decoder.reset(withPosition: 0)
         }
         
         if let mappingData {
             let payload = unpacker.extractPayload(mappingData)
             if payload.count > 0 {
-                decoder.feed(payload as Data, anchorTimestamp: 0)
+                decoder.feed(payload as Data, anchorTimestamp: 0, batchId: batchId)
             }
         }
         
@@ -176,32 +179,32 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             
             let payload = unpacker.extractPayload(segmentData.data)
             if payload.count > 0 {
-                print("flow: flight: feed to decoder")
                 decodingSegment = segmentData.segment
-                decoder.feed(payload as Data, anchorTimestamp: segmentData.segment.since)
+                decoder.feed(payload as Data, anchorTimestamp: segmentData.segment.since, batchId: batchId)
             }
         }
     }
     
-    internal func videoDecoder(_ decoder: FTVideoH264Decoder, startBatchDecoding now: Date) {
+    internal func videoDecoder(_ decoder: FTVideoH264Decoder, startBatchDecoding now: Date, batchId: String) {
     }
     
-    internal func videoDecoder(_ decoder: FTVideoH264Decoder, recognizeFrame frame: FTPlaybackFrame) {
+    internal func videoDecoder(_ decoder: FTVideoH264Decoder, recognizeFrame frame: FTPlaybackFrame, batchId: String) {
+        print("flow provider recognizeFrame")
+        
         if let decodingSegment {
             frame.segmentEndtime = decodingSegment.until
         }
         
-        if let seekRequest {
+        if let seekRequest, seekRequest.requestId == batchId {
             seekRequest.frames.append(frame)
         }
         else {
-            print("flow: flight: commit the frame")
             _ = commitFrame(frame, frameIndex: nil)
         }
     }
     
-    internal func videoDecoder(_ decoder: FTVideoH264Decoder, endBatchDecoding now: Date) {
-        if let seekRequest = seekRequest {
+    internal func videoDecoder(_ decoder: FTVideoH264Decoder, endBatchDecoding now: Date, batchId: String) {
+        if let seekRequest = seekRequest, seekRequest.requestId == batchId {
             defer {
                 self.seekRequest = nil
             }
@@ -211,7 +214,10 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             
             var lowerIndex = targetIndex
             while (lowerIndex >= 0) {
-                if seekRequest.frames[lowerIndex].isKeyframe {
+                if lowerIndex >= seekRequest.frames.count {
+                    continue
+                }
+                else if seekRequest.frames[lowerIndex].isKeyframe {
                     break
                 }
                 else {

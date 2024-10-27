@@ -13,12 +13,12 @@ protocol IFTMediaProvider: AnyObject {
     var delegate: FTMediaProviderDelegate? { get set }
     func bindPlaylist(info: FTMediaPlaylistInfo)
     func preloadNext(current: TimeInterval, next: TimeInterval) -> TimeInterval
-    func resetTo(timestamp: TimeInterval) -> TimeInterval
+    func resetTo(timestamp: TimeInterval, batchId: String) -> TimeInterval
     func discardAll()
 }
 
 protocol FTMediaProviderDelegate: AnyObject {
-    func mediaProvider(_ provider: IFTMediaProvider, fresh: Bool, mappingData: Data?, segmentsData: [FTMediaPlaylistSegmentContent])
+    func mediaProvider(_ provider: IFTMediaProvider, fresh: Bool, mappingData: Data?, segmentsData: [FTMediaPlaylistSegmentContent], batchId: String)
 }
 
 final class FTMediaProvider: IFTMediaProvider {
@@ -73,7 +73,7 @@ final class FTMediaProvider: IFTMediaProvider {
             return next
         }
         
-        if let distant = preloadTimeRange(fresh: false, search: .starting(next)) {
+        if let distant = preloadTimeRange(fresh: false, search: .starting(next), batchId: UUID().uuidString) {
             return distant
         }
         else {
@@ -81,11 +81,13 @@ final class FTMediaProvider: IFTMediaProvider {
         }
     }
     
-    func resetTo(timestamp: TimeInterval) -> TimeInterval {
+    func resetTo(timestamp: TimeInterval, batchId: String) -> TimeInterval {
+        print("D/JMP provider resetTo timestamp[\(timestamp)]")
         requestingRange = IndexSet()
         downloadingOperationQueue.cancelAllOperations()
         
-        if let distant = preloadTimeRange(fresh: true, search: .including(timestamp)) {
+        if let distant = preloadTimeRange(fresh: true, search: .including(timestamp), batchId: batchId) {
+            print("D/JMP provider resetTo ok")
             return distant
         }
         else {
@@ -104,7 +106,7 @@ final class FTMediaProvider: IFTMediaProvider {
         case including(TimeInterval)
     }
     
-    private func preloadTimeRange(fresh: Bool, search: TimeRangeSearch) -> TimeInterval? {
+    private func preloadTimeRange(fresh: Bool, search: TimeRangeSearch, batchId: String) -> TimeInterval? {
         guard let info else {
             return nil
         }
@@ -139,7 +141,7 @@ final class FTMediaProvider: IFTMediaProvider {
         
         requestingRange = segmentsIndices
         
-        readyOperation = makeReadyOperation(fresh: fresh, indices: segmentsIndices)
+        readyOperation = makeReadyOperation(fresh: fresh, indices: segmentsIndices, batchId: batchId)
         readyOperation.addDependency(mappingOperation)
         defer {
             downloadingOperationQueue.addOperation(readyOperation)
@@ -190,7 +192,7 @@ final class FTMediaProvider: IFTMediaProvider {
         )
     }
     
-    private func makeReadyOperation(fresh: Bool, indices: IndexSet) -> Operation {
+    private func makeReadyOperation(fresh: Bool, indices: IndexSet, batchId: String) -> Operation {
         FTMediaProviderSimpleOperation(
             completion: { [weak self] in
                 guard let self, let info else {
@@ -217,7 +219,8 @@ final class FTMediaProvider: IFTMediaProvider {
                     self,
                     fresh: fresh,
                     mappingData: cachedMappingData,
-                    segmentsData: segments)
+                    segmentsData: segments,
+                    batchId: batchId)
             }
         )
     }

@@ -178,10 +178,6 @@ final class HLSVideoAVContentNode: ASDisplayNode, UniversalVideoContentNode {
                     }
                     
                     self.setPlayerItem(playerItem)
-                    
-                    if let c = try? String(contentsOf: URL(string: assetUrl)!, encoding: .utf8) {
-                        print(c)
-                    }
                 }
             })
         }
