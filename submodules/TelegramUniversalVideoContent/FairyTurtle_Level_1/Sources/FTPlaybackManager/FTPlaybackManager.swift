@@ -39,9 +39,12 @@ public final class FTPlaybackManager: NSObject, IFTPlaybackManager, FTPlaybackFl
     private var displayLink: CADisplayLink?
     
     private var masterPlaylist: FTMasterPlaylist?
-    private let framesOperationQueue = DispatchQueue.global(qos: .userInteractive)
-    private let framesMutex = NSLock()
-    private var framesDeque = [FTPlaybackFrame]() // replace with Dequeue<FTPlaybackFrame>
+    private let videoOperationQueue = DispatchQueue.global(qos: .userInteractive)
+    private let videoMutex = NSLock()
+    private var videoDeque = [FTPlaybackFrame]() // replace with Dequeue<FTPlaybackFrame>
+    private let audioOperationQueue = DispatchQueue.global(qos: .userInteractive)
+    private let audioMutex = NSLock()
+    private var audioDeque = [FTPlaybackFrame]() // replace with Dequeue<FTPlaybackFrame>
     private var nextPreloadTime = TimeInterval.zero
     private var recentTimestamp = Double.zero
     private var recentRate = Float64(1.0)
@@ -172,28 +175,36 @@ public final class FTPlaybackManager: NSObject, IFTPlaybackManager, FTPlaybackFl
     @objc private func handleFrameTick() {
         playbackFlight.preloadMore(now: nextPreloadTime)
         
-        framesMutex.lock()
-        if framesDeque.hasElements {
-            framesOperationQueue.async { [weak self] in
-                self?.handleFrameTick_enqueueBuffers()
+        videoMutex.lock()
+        if videoDeque.hasElements {
+            videoOperationQueue.async { [weak self] in
+                self?.handleFrameTick_enqueueVideo()
             }
         }
-        framesMutex.unlock()
+        videoMutex.unlock()
+        
+        audioMutex.lock()
+        if audioDeque.hasElements {
+            audioOperationQueue.async { [weak self] in
+                self?.handleFrameTick_enqueueAudio()
+            }
+        }
+        audioMutex.unlock()
     }
     
-    private func handleFrameTick_enqueueBuffers() {
+    private func handleFrameTick_enqueueVideo() {
         guard let videoLayer else {
             return
         }
         
-        framesMutex.lock()
+        videoMutex.lock()
         defer {
-            framesMutex.unlock()
+            videoMutex.unlock()
         }
         
-        while framesDeque.hasElements {
+        while videoDeque.hasElements {
             if videoLayer.isReadyForMoreMediaData {
-                let frame = framesDeque.removeFirst()
+                let frame = videoDeque.removeFirst()
                 videoLayer.enqueue(frame.sampleBuffer)
                 recentTimestamp = frame.absoluteTimestamp
                 nextPreloadTime = frame.segmentEndtime
@@ -204,27 +215,58 @@ public final class FTPlaybackManager: NSObject, IFTPlaybackManager, FTPlaybackFl
         }
     }
     
-    internal func playbackFlight(_ flight: any IFTPlaybackTimeline, needPresentationRestart pts: Int64) {
-        guard let videoLayer else {
+    private func handleFrameTick_enqueueAudio() {
+        guard let audioRenderer else {
             return
         }
         
-        videoLayer.flush()
+        audioMutex.lock()
+        defer {
+            audioMutex.unlock()
+        }
+        
+        while audioDeque.hasElements {
+            if audioRenderer.isReadyForMoreMediaData {
+                let frame = audioDeque.removeFirst()
+                audioRenderer.enqueue(frame.sampleBuffer)
+            }
+            else {
+                break
+            }
+        }
+    }
+    
+    internal func playbackFlight(_ flight: any IFTPlaybackTimeline, needPresentationRestart pts: Int64) {
+        videoLayer?.flush()
+        audioRenderer?.flush()
         
         mediaSynchronizer.setRate(1.0, time: CMTime.zero)
         recentRate = 1.0
     }
     
-    internal func playbackFlight(_ flight: any IFTPlaybackTimeline, haveNextFrame frame: FTPlaybackFrame) {
-        framesMutex.lock()
+    internal func playbackFlight(_ flight: any IFTPlaybackTimeline, haveNextVideoFrame frame: FTPlaybackFrame) {
+        videoMutex.lock()
         defer {
-            framesMutex.unlock()
+            videoMutex.unlock()
         }
         
         if frame.shouldFlush {
-            framesDeque.removeAll()
+            videoDeque.removeAll()
         }
         
-        framesDeque.append(frame)
+        videoDeque.append(frame)
+    }
+    
+    internal func playbackFlight(_ flight: any IFTPlaybackTimeline, haveNextAudioFrame frame: FTPlaybackFrame) {
+        audioMutex.lock()
+        defer {
+            audioMutex.unlock()
+        }
+        
+        if frame.shouldFlush {
+            audioDeque.removeAll()
+        }
+        
+        audioDeque.append(frame)
     }
 }

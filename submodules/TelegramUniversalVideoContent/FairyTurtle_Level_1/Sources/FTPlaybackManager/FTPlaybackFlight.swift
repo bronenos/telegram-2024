@@ -21,10 +21,11 @@ protocol IFTPlaybackTimeline {
 
 protocol FTPlaybackFlightDelegate: AnyObject {
     func playbackFlight(_ flight: IFTPlaybackTimeline, needPresentationRestart pts: Int64)
-    func playbackFlight(_ flight: IFTPlaybackTimeline, haveNextFrame frame: FTPlaybackFrame)
+    func playbackFlight(_ flight: IFTPlaybackTimeline, haveNextVideoFrame frame: FTPlaybackFrame)
+    func playbackFlight(_ flight: IFTPlaybackTimeline, haveNextAudioFrame frame: FTPlaybackFrame)
 }
 
-final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVideoDecoderDelegate {
+final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVideoDecoderDelegate, FTAudioDecoderDelegate {
     private let contentDownloader: IFTContentDownloader
     private let mediaProvider: IFTMediaProvider
     
@@ -33,8 +34,9 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     private let queue = DispatchQueue(label: "ftplayback.queue.flight", qos: .userInteractive)
     private var videoMeta = FTContainerVideoMeta()
     private var audioMeta = FTContainerAudioMeta()
-    private let unpacker: FTContainerUnpacker
-    private var decoder: FTVideoH264Decoder
+    private let containerUnpacker: FTContainerUnpacker
+    private var videoDecoder: FTVideoH264Decoder
+    private var audioDecoder: FTAudioAacDecoder
     
     private var masterPlaylist: FTMasterPlaylist?
     private var currentFrameIndex = Int64.zero
@@ -59,12 +61,18 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     init(contentDownloader: FTContentDownloader) {
         self.contentDownloader = contentDownloader
         
-        unpacker = FTContainerUnpacker(variants: [
+        containerUnpacker = FTContainerUnpacker(variants: [
             FTContainerFmp4Unpacker(videoMeta: videoMeta, audioMeta: audioMeta),
             FTContainerTsUnpacker(videoMeta: videoMeta, audioMeta: audioMeta)
         ])
         
-        decoder = FTVideoH264Decoder(meta: videoMeta)
+        videoDecoder = FTVideoH264Decoder(
+            meta: videoMeta
+        )
+        
+        audioDecoder = FTAudioAacDecoder(
+            meta: audioMeta
+        )
         
         mediaProvider = FTMediaProvider(
             warmDuration: 10,
@@ -72,7 +80,8 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
         )
         
         mediaProvider.delegate = self
-        decoder.delegate = self
+        videoDecoder.delegate = self
+        audioDecoder.delegate = self
     }
     
     var currentHeight: Int {
@@ -142,7 +151,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
         }
     }
     
-    private func commitFrame(_ frame: FTPlaybackFrame, frameIndex: Int64?) -> Int64 {
+    private func commitVideoFrame(_ frame: FTPlaybackFrame, frameIndex: Int64?) -> Int64 {
         if currentFrameIndex == 0 {
             delegate?.playbackFlight(self, needPresentationRestart: 0)
         }
@@ -151,11 +160,10 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             currentFrameIndex = frameIndex ?? currentFrameIndex + 1
         }
         
-        print("flow: flight: set pts \(Double(currentFrameIndex) / Double(videoMeta.fps)) per \(videoMeta.fps)")
         let pts = CMTimeAdd(CMTime.zero, CMTimeMake(value: currentFrameIndex, timescale: videoMeta.fps))
         CMSampleBufferSetOutputPresentationTimeStamp(frame.sampleBuffer, newValue: pts)
         
-        delegate?.playbackFlight(self, haveNextFrame: frame)
+        delegate?.playbackFlight(self, haveNextVideoFrame: frame)
         
         return currentFrameIndex
     }
@@ -163,13 +171,15 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     internal func mediaProvider(_ provider: any IFTMediaProvider, fresh: Bool, mappingData: Data?, segmentsData: [FTMediaPlaylistSegmentContent], batchId: String) {
         if fresh {
             currentFrameIndex = 0
-            decoder.reset(withPosition: 0)
+            videoDecoder.reset(withPosition: 0)
+            audioDecoder.reset(withPosition: 0)
         }
         
         if let mappingData {
-            let payload = unpacker.extractPayload(mappingData)
+            let payload = containerUnpacker.extractPayload(mappingData)
             if payload.count > 0 {
-                decoder.feed(payload as Data, anchorTimestamp: 0, batchId: batchId)
+                videoDecoder.feed(payload as Data, anchorTimestamp: 0, batchId: batchId)
+                audioDecoder.feed(payload as Data, anchorTimestamp: 0, batchId: batchId)
             }
         }
         
@@ -178,10 +188,11 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
                 continue
             }
             
-            let payload = unpacker.extractPayload(segmentData.data)
+            let payload = containerUnpacker.extractPayload(segmentData.data)
             if payload.count > 0 {
                 decodingSegment = segmentData.segment
-                decoder.feed(payload as Data, anchorTimestamp: segmentData.segment.since, batchId: batchId)
+                videoDecoder.feed(payload as Data, anchorTimestamp: segmentData.segment.since, batchId: batchId)
+                audioDecoder.feed(payload as Data, anchorTimestamp: segmentData.segment.since, batchId: batchId)
             }
         }
     }
@@ -190,8 +201,6 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     }
     
     internal func videoDecoder(_ decoder: FTVideoH264Decoder, recognizeFrame frame: FTPlaybackFrame, batchId: String) {
-        print("flow provider recognizeFrame")
-        
         if let decodingSegment {
             frame.segmentEndtime = decodingSegment.until
         }
@@ -200,7 +209,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             seekRequest.frames.append(frame)
         }
         else {
-            _ = commitFrame(frame, frameIndex: nil)
+            _ = commitVideoFrame(frame, frameIndex: nil)
         }
     }
     
@@ -246,12 +255,21 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             
             for (index, frame) in seekRequest.frames.dropFirst(keyIndex).enumerated() {
                 if index == 0 {
-                    _ = commitFrame(frame, frameIndex: 0)
+                    _ = commitVideoFrame(frame, frameIndex: 0)
                 }
                 else {
-                    _ = commitFrame(frame, frameIndex: nil)
+                    _ = commitVideoFrame(frame, frameIndex: nil)
                 }
             }
         }
+    }
+    
+    internal func audioDecoder(_ decoder: FTAudioAacDecoder, startBatchDecoding now: Date, batchId: String) {
+    }
+    
+    internal func audioDecoder(_ decoder: FTAudioAacDecoder, recognizeFrame frame: FTPlaybackFrame, batchId: String) {
+    }
+    
+    internal func audioDecoder(_ decoder: FTAudioAacDecoder, endBatchDecoding now: Date, batchId: String) {
     }
 }

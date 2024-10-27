@@ -111,7 +111,10 @@ static const uint32_t f_atom_name_mdat = 'tadm';
             }
             case f_atom_name_trak_mdia_minf_stbl_stsd: {
                 if ([scannedMediaType isEqualToString:@"vide"]) {
-                    [self parseStsd:payload];
+                    [self parseStsd_vide:payload];
+                }
+                else if ([scannedMediaType isEqualToString:@"soun"]) {
+                    [self parseStsd_soun:payload];
                 }
                 break;
             }
@@ -123,13 +126,13 @@ static const uint32_t f_atom_name_mdat = 'tadm';
             }
             case f_atom_name_trak_mdia_minf_stbl_stco: {
                 if ([scannedMediaType isEqualToString:@"vide"]) {
-                    [self parseStco:payload];
+                    [self parseStco_vide:payload];
                 }
                 break;
             }
             case f_atom_name_trak_mdia_minf_stbl_stsz: {
                 if ([scannedMediaType isEqualToString:@"vide"]) {
-                    [self parseStsz:payload];
+                    [self parseStsz_vide:payload];
                 }
                 break;
             }
@@ -258,7 +261,7 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     return YES;
 }
 
-- (void)parseStsd:(NSData *)input { 
+- (void)parseStsd_vide:(NSData *)input { 
     NSMutableData *buffer = [input mutableCopy];
     NSMutableDictionary *boxes = [NSMutableDictionary new];
     
@@ -349,7 +352,37 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     }
 }
 
-- (void)parseStco:(NSData *)input { 
+- (void)parseStsd_soun:(NSData *)input { 
+    NSMutableData *buffer = [input mutableCopy];
+    NSMutableDictionary *boxes = [NSMutableDictionary new];
+    
+    [buffer dropFirst:sizeof(uint32_t)];
+    
+    const uint32_t num = BYTE_ROTATE_UINT_32(buffer.bytes);
+    [buffer dropFirst:sizeof(uint32_t)];
+    
+    for (uint32_t n = 0; n < num; n++) {
+//        uint32_t sublen = BYTE_ROTATE_UINT_32(buffer.bytes);
+        [buffer dropFirst:sizeof(uint32_t)];
+//        sublen -= sizeof(uint32_t);
+        
+        self->audioMeta.mediaCodec = [[NSString alloc] initWithBytes:buffer.bytes length:sizeof(uint32_t) encoding:NSASCIIStringEncoding];
+//        [buffer dropFirst:sizeof(uint32_t)];
+//        sublen -= sizeof(uint32_t);
+//        
+//        [buffer dropFirst:6];
+//        [buffer dropFirst:2];
+//        sublen -= 8;
+//        
+//        if ([self->audioMeta.mediaCodec isEqualToString:@"mp4a"]) {
+//        }
+//        else {
+//            [buffer dropFirst:sublen];
+//        }
+    }
+}
+
+- (void)parseStco_vide:(NSData *)input { 
     NSMutableData *buffer = [input mutableCopy];
     NSMutableArray<NSNumber *> *offsets = [NSMutableArray new];
     
@@ -368,7 +401,7 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     self->videoMeta.videoChunkOffsets = offsets;
 }
 
-- (void)parseStsz:(NSData *)input { 
+- (void)parseStsz_vide:(NSData *)input { 
     NSMutableData *buffer = [input mutableCopy];
     NSMutableArray<NSNumber *> *sampleSizes = [NSMutableArray new];
     

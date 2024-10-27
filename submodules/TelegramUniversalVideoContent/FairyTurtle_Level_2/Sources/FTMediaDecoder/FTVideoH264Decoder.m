@@ -10,10 +10,7 @@
 #import "FTVideoH264Decoder.h"
 #import "FTPlaybackFrame.h"
 #import "../Extensions/NSData+.h"
-//#import "FTPlayerView-Swift.h"
 #import "../ThirdParty/h264_sps_parse/h264_sps_parse.h"
-
-static void videoToolboxDidDecompress(void *decompressionOutputRefCon, void *sourceFrameRefCon, OSStatus status, VTDecodeInfoFlags infoFlags, CVImageBufferRef pixelBuffer, CMTime presentationTimeStamp, CMTime presentationDuration);
 
 static uint8_t const f_nalu_starting_pad = 0x00;
 static uint8_t const f_nalu_short_header[] = {f_nalu_starting_pad, f_nalu_starting_pad, 0x01};
@@ -86,13 +83,6 @@ typedef enum {
     
     [self.delegate videoDecoder:self startBatchDecoding:[NSDate new] batchId:self->batchId];
     for (;;) {
-        static uint32_t num = 0;
-        num++;
-        
-        if (num == 150) {
-            printf("Decoding %d left: %lu \n", num, (unsigned long)contiguousBuffer.length);
-        }
-        
         NSData *naluBuffer = [self findNextNaluWithHeader:self->meta];
         if (naluBuffer == NULL) {
             break;
@@ -342,10 +332,6 @@ typedef enum {
         return NO;
     }
     
-//    CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
-//    CFMutableDictionaryRef dict = (CFMutableDictionaryRef) CFArrayGetValueAtIndex(attachments, 0);
-//    CFDictionarySetValue(dict, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
-    
     FTPlaybackFrame *frame = [[FTPlaybackFrame alloc] initWithSampleBuffer:sampleBuffer];
     frame.isKeyframe = (frameKind == FTVideoH264_NALU_KIND_I_FRAME);
     frame.shouldFlush = shouldFlush;
@@ -360,25 +346,3 @@ typedef enum {
     return YES;
 }
 @end
-
-//static void videoToolboxDidDecompress(void *decompressionOutputRefCon, void *sourceFrameRefCon, OSStatus status, VTDecodeInfoFlags infoFlags, CVImageBufferRef imageBuffer, CMTime presentationTimeStamp, CMTime presentationDuration) {
-//    if (status == noErr) {
-//        printf("decompressing: OK %lld -> %lld %s -- %s\n",
-//               presentationTimeStamp.value,
-//               presentationDuration.value,
-//               [NSStringFromCGSize(CVImageBufferGetDisplaySize(imageBuffer)) cStringUsingEncoding:kCFStringEncodingUTF8],
-//               [NSStringFromCGRect(CVImageBufferGetCleanRect(imageBuffer)) cStringUsingEncoding:kCFStringEncodingUTF8]
-//               );
-//    }
-//    else {
-//        printf("decompressing: ERROR %d\n", status);
-//    }
-    
-//    FTVideoDecoder *ref = (__bridge FTVideoDecoder *)(decompressionOutputRefCon);
-//    if (imageBuffer) {
-//        static size_t num = 0;
-//        NSLog(@"decomp %lu", num);
-//        
-//        [ref.delegate videoDecoder:ref didDecompress:imageBuffer];
-//    }
-//}
