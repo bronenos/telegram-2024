@@ -14,12 +14,14 @@ static const uint8_t f_proto_sync_byte = 0x47;
 
 @implementation FTContainerTsUnpacker
 {
-    FTContainerVideoMeta *meta;
+    FTContainerVideoMeta *videoMeta;
+    FTContainerAudioMeta *audioMeta;
 }
 
-- (instancetype)initWithMeta:(FTContainerVideoMeta *)meta {
+- (instancetype)initWithVideoMeta:(FTContainerVideoMeta *)videoMeta audioMeta:(FTContainerAudioMeta *)audioMeta {
     if ((self = [super init])) {
-        self->meta = meta;
+        self->videoMeta = videoMeta;
+        self->audioMeta = audioMeta;
     }
     
     return self;

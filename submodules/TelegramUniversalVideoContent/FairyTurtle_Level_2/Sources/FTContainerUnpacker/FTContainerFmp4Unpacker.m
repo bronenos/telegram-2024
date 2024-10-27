@@ -7,6 +7,7 @@
 
 #import "FTContainerFmp4Unpacker.h"
 #import "FTContainerVideoMeta.h"
+#import "FTContainerAudioMeta.h"
 #import "../Extensions/NSData+.h"
 
 static const size_t f_atom_header_len = 8; // len(4) + name(4)
@@ -43,15 +44,22 @@ static const uint32_t f_atom_name_mdat = 'tadm';
 //static const uint32_t f_atom_name_meta = 'atem';
 //static const uint32_t f_atom_name_ilst = 'tsli';
 
+#define BYTE_ROTATE_UINT_8(src) (*(uint8_t *) (src))
+#define BYTE_ROTATE_UINT_16(src) htons(*(uint16_t *) (src))
+#define BYTE_ROTATE_UINT_32(src) htonl(*(uint32_t *) (src))
+#define BYTE_ROTATE_UINT_64(src) htonll(*(uint64_t *) (src))
 
 @implementation FTContainerFmp4Unpacker
 {
     FTContainerVideoMeta *videoMeta;
+    FTContainerAudioMeta *audioMeta;
+    NSString *scannedMediaType;
 }
 
-- (instancetype)initWithMeta:(FTContainerVideoMeta *)meta {
+- (instancetype)initWithVideoMeta:(FTContainerVideoMeta *)videoMeta audioMeta:(FTContainerAudioMeta *)audioMeta {
     if ((self = [super init])) {
-        self->videoMeta = meta;
+        self->videoMeta = videoMeta;
+        self->audioMeta = audioMeta;
     }
     
     return self;
@@ -98,11 +106,13 @@ static const uint32_t f_atom_name_mdat = 'tadm';
                 break;
             }
             case f_atom_name_trak_mdia_hdlr: {
-                self->videoMeta.mediaType = [[NSString alloc] initWithBytes:(payload_ptr + 8) length:4 encoding:NSASCIIStringEncoding];
+                self->scannedMediaType = [[NSString alloc] initWithBytes:(payload_ptr + 8) length:4 encoding:NSASCIIStringEncoding];
                 break;
             }
             case f_atom_name_trak_mdia_minf_stbl_stsd: {
-                [self parseStsd:payload];
+                if ([scannedMediaType isEqualToString:@"vide"]) {
+                    [self parseStsd:payload];
+                }
                 break;
             }
             case f_atom_name_trak_mdia_minf_stbl_stsd_avc1: {
@@ -112,22 +122,28 @@ static const uint32_t f_atom_name_mdat = 'tadm';
                 break;
             }
             case f_atom_name_trak_mdia_minf_stbl_stco: {
-                [self parseStco:payload];
+                if ([scannedMediaType isEqualToString:@"vide"]) {
+                    [self parseStco:payload];
+                }
                 break;
             }
             case f_atom_name_trak_mdia_minf_stbl_stsz: {
-                [self parseStsz:payload];
+                if ([scannedMediaType isEqualToString:@"vide"]) {
+                    [self parseStsz:payload];
+                }
                 break;
             }
             case f_atom_name_trak_mdia_mdhd: {
-                const uint8_t version = *((uint8_t*) (payload_ptr + 0));
-                if (version == 0) {
-                    self->videoMeta.timeScale = htonl(*((uint32_t*) (payload_ptr + 12)));
-                    self->videoMeta.duration = htonl(*((uint32_t*) (payload_ptr + 16)));
-                }
-                else {
-                    self->videoMeta.timeScale = htonl(*((uint32_t*) (payload_ptr + 20)));
-                    self->videoMeta.duration = htonl(*((uint64_t*) (payload_ptr + 24)));
+                if ([scannedMediaType isEqualToString:@"vide"]) {
+                    const uint8_t version = BYTE_ROTATE_UINT_8(payload_ptr + 0);
+                    if (version == 0) {
+                        self->videoMeta.timeScale = BYTE_ROTATE_UINT_32(payload_ptr + 12);
+                        self->videoMeta.duration = BYTE_ROTATE_UINT_32(payload_ptr + 16);
+                    }
+                    else {
+                        self->videoMeta.timeScale = BYTE_ROTATE_UINT_32(payload_ptr + 20);
+                        self->videoMeta.duration = BYTE_ROTATE_UINT_64(payload_ptr + 24);
+                    }
                 }
                 break;
             }
@@ -248,11 +264,11 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     
     [buffer dropFirst:sizeof(uint32_t)];
     
-    const uint32_t num = htonl(*((uint32_t *) (buffer.bytes)));
+    const uint32_t num = BYTE_ROTATE_UINT_32(buffer.bytes);
     [buffer dropFirst:sizeof(uint32_t)];
     
     for (uint32_t n = 0; n < num; n++) {
-        uint32_t sublen = htonl(*((uint32_t *) (buffer.bytes)));
+        uint32_t sublen = BYTE_ROTATE_UINT_32(buffer.bytes);
         [buffer dropFirst:sizeof(uint32_t)];
         sublen -= sizeof(uint32_t);
         
@@ -268,11 +284,11 @@ static const uint32_t f_atom_name_mdat = 'tadm';
             [buffer dropFirst:16];
             sublen -= 16;
             
-            self->videoMeta.pixelWidth = htonl(*((uint16_t *) (buffer.bytes)));
+            self->videoMeta.pixelWidth = BYTE_ROTATE_UINT_16(buffer.bytes);
             [buffer dropFirst:sizeof(uint16_t)];
             sublen -= sizeof(uint16_t);
 
-            self->videoMeta.pixelHeight = htonl(*((uint16_t *) (buffer.bytes)));
+            self->videoMeta.pixelHeight = BYTE_ROTATE_UINT_16(buffer.bytes);
             [buffer dropFirst:sizeof(uint16_t)];
             sublen -= sizeof(uint16_t);
             
@@ -286,7 +302,7 @@ static const uint32_t f_atom_name_mdat = 'tadm';
             sublen -= 50;
             
             while (sublen > 0) {
-                const uint32_t boxlen = htonl(*((uint32_t *) (buffer.bytes)));
+                const uint32_t boxlen = BYTE_ROTATE_UINT_32(buffer.bytes);
                 [buffer dropFirst:sizeof(uint32_t)];
                 sublen -= sizeof(uint32_t);
                 
@@ -314,7 +330,7 @@ static const uint32_t f_atom_name_mdat = 'tadm';
             
             const uint8_t spsNum = *info++ & 0x31;
             for (uint8_t s = 0; s < spsNum; s++) {
-                const uint16_t sps_len = htons(*(uint16_t *) info);
+                const uint16_t sps_len = BYTE_ROTATE_UINT_16(info);
                 info += sizeof(sps_len);
                 
                 self->videoMeta.sps = self->videoMeta.sps ?: [NSData dataWithBytes:info length:sps_len];
@@ -323,7 +339,7 @@ static const uint32_t f_atom_name_mdat = 'tadm';
             
             const uint8_t ppsNum = *info++;
             for (uint8_t p = 0; p < ppsNum; p++) {
-                const uint16_t pps_len = htons(*(uint16_t *) info);
+                const uint16_t pps_len = BYTE_ROTATE_UINT_16(info);
                 info += sizeof(pps_len);
                 
                 self->videoMeta.pps = self->videoMeta.pps ?: [NSData dataWithBytes:info length:pps_len];
@@ -339,11 +355,11 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     
     [buffer dropFirst:sizeof(uint32_t)];
     
-    const uint32_t num = htonl(*((uint32_t *) (buffer.bytes)));
+    const uint32_t num = BYTE_ROTATE_UINT_32(buffer.bytes);
     [buffer dropFirst:sizeof(uint32_t)];
     
     for (uint32_t n = 0; n < num; n++) {
-        uint32_t offset = htonl(*((uint32_t *) (buffer.bytes)));
+        const uint32_t offset = BYTE_ROTATE_UINT_32(buffer.bytes);
         [buffer dropFirst:sizeof(uint32_t)];
         
         [offsets addObject:@(offset)];
@@ -359,11 +375,11 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     [buffer dropFirst:sizeof(uint32_t)];
     [buffer dropFirst:sizeof(uint32_t)];
     
-    const uint32_t num = htonl(*((uint32_t *) (buffer.bytes)));
+    const uint32_t num = BYTE_ROTATE_UINT_32(buffer.bytes);
     [buffer dropFirst:sizeof(uint32_t)];
     
     for (uint32_t n = 0; n < num; n++) {
-        uint32_t sampleSize = htonl(*((uint32_t *) (buffer.bytes)));
+        const uint32_t sampleSize = BYTE_ROTATE_UINT_32(buffer.bytes);
         [buffer dropFirst:sizeof(uint32_t)];
         
         [sampleSizes addObject:@(sampleSize)];
@@ -372,3 +388,8 @@ static const uint32_t f_atom_name_mdat = 'tadm';
     self->videoMeta.videoSampleSizes = sampleSizes;
 }
 @end
+
+#undef BYTE_ROTATE_UINT_8
+#undef BYTE_ROTATE_UINT_16
+#undef BYTE_ROTATE_UINT_32
+#undef BYTE_ROTATE_UINT_64

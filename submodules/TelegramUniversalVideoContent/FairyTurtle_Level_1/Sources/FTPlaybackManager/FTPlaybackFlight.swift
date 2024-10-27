@@ -31,7 +31,8 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
     weak var delegate: FTPlaybackFlightDelegate?
     
     private let queue = DispatchQueue(label: "ftplayback.queue.flight", qos: .userInteractive)
-    private var meta = FTContainerVideoMeta()
+    private var videoMeta = FTContainerVideoMeta()
+    private var audioMeta = FTContainerAudioMeta()
     private let unpacker: FTContainerUnpacker
     private var decoder: FTVideoH264Decoder
     
@@ -59,11 +60,11 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
         self.contentDownloader = contentDownloader
         
         unpacker = FTContainerUnpacker(variants: [
-            FTContainerFmp4Unpacker(meta: meta),
-            FTContainerTsUnpacker(meta: meta)
+            FTContainerFmp4Unpacker(videoMeta: videoMeta, audioMeta: audioMeta),
+            FTContainerTsUnpacker(videoMeta: videoMeta, audioMeta: audioMeta)
         ])
         
-        decoder = FTVideoH264Decoder(meta: meta)
+        decoder = FTVideoH264Decoder(meta: videoMeta)
         
         mediaProvider = FTMediaProvider(
             warmDuration: 10,
@@ -150,8 +151,8 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
             currentFrameIndex = frameIndex ?? currentFrameIndex + 1
         }
         
-        print("flow: flight: set pts \(Double(currentFrameIndex) / Double(meta.fps)) per \(meta.fps)")
-        let pts = CMTimeAdd(CMTime.zero, CMTimeMake(value: currentFrameIndex, timescale: meta.fps))
+        print("flow: flight: set pts \(Double(currentFrameIndex) / Double(videoMeta.fps)) per \(videoMeta.fps)")
+        let pts = CMTimeAdd(CMTime.zero, CMTimeMake(value: currentFrameIndex, timescale: videoMeta.fps))
         CMSampleBufferSetOutputPresentationTimeStamp(frame.sampleBuffer, newValue: pts)
         
         delegate?.playbackFlight(self, haveNextFrame: frame)
@@ -209,7 +210,7 @@ final class FTPlaybackFlight: IFTPlaybackTimeline, FTMediaProviderDelegate, FTVi
                 self.seekRequest = nil
             }
             
-            let targetIndex = Int(Double(meta.fps) * seekRequest.percentage)
+            let targetIndex = Int(Double(videoMeta.fps) * seekRequest.percentage)
 //            var seekFrameIndex: Int64?
             
             var lowerIndex = targetIndex

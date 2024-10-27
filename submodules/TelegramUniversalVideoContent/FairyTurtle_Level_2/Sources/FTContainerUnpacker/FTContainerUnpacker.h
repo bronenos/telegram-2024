@@ -7,6 +7,7 @@
 
 @import Foundation;
 #import "FTContainerVideoMeta.h"
+#import "FTContainerAudioMeta.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

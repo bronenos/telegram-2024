@@ -10,7 +10,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface FTContainerVideoMeta : NSObject
-@property(nonatomic, copy) NSString *mediaType;
 @property(nonatomic, copy) NSString *mediaCodec;
 @property(nonatomic, assign) size_t pixelWidth;
 @property(nonatomic, assign) size_t pixelHeight;

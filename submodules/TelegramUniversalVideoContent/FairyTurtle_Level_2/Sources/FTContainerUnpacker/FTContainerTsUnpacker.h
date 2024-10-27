@@ -11,7 +11,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface FTContainerTsUnpacker : FTContainerUnpacker
-- (instancetype)initWithMeta:(FTContainerVideoMeta *)meta;
+- (instancetype)initWithVideoMeta:(FTContainerVideoMeta *)videoMeta audioMeta:(FTContainerAudioMeta *)audioMeta;
 @end
 
 NS_ASSUME_NONNULL_END
